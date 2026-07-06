@@ -24,7 +24,7 @@ jobs:
         extensions: mbstring, json, curl, gd, dom
         tools: composer:v2
 
-    - name: Validate composer.json and composer.lock
+    - name: Validate composer.json
       run: composer validate
 
     - name: Cache Composer packages
@@ -36,9 +36,25 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-php-${{ matrix.php-version }}-
 
+    - name: Update dependencies for PHP 8.3 compatibility
+      run: composer update --no-dev --prefer-dist --no-progress --no-interaction
+
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress --no-interaction
 
     - name: Run tests
       run: composer test
       continue-on-error: true
+
+    - name: Commit and push updated composer.lock
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        if git diff --quiet composer.lock; then
+          echo "No changes to composer.lock"
+        else
+          git add composer.lock
+          git commit -m "chore: update composer.lock for PHP 8.3 compatibility"
+          git push
+        fi
