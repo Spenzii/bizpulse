@@ -10,6 +10,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testing
+          MYSQL_USER: testing
+          MYSQL_PASSWORD: testing
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+        ports:
+          - 3306:3306
+
     strategy:
       matrix:
         php-version: ['8.3']
@@ -21,7 +37,7 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ matrix.php-version }}
-        extensions: mbstring, json, curl, gd, dom
+        extensions: mbstring, json, curl, gd, dom, pdo, pdo_mysql
         tools: composer:v2
 
     - name: Validate composer.json
@@ -36,13 +52,32 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-php-${{ matrix.php-version }}-
 
-    - name: Update dependencies for PHP 8.3 compatibility
-      run: composer update --no-dev --prefer-dist --no-progress --no-interaction
-
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress --no-interaction
 
+    - name: Setup Laravel Environment
+      run: |
+        cp .env.example .env.testing
+        php artisan key:generate --env=testing
+
+    - name: Run Database Migrations
+      env:
+        DB_CONNECTION: mysql
+        DB_HOST: 127.0.0.1
+        DB_PORT: 3306
+        DB_DATABASE: testing
+        DB_USERNAME: testing
+        DB_PASSWORD: testing
+      run: php artisan migrate --env=testing --force
+
     - name: Run tests
+      env:
+        DB_CONNECTION: mysql
+        DB_HOST: 127.0.0.1
+        DB_PORT: 3306
+        DB_DATABASE: testing
+        DB_USERNAME: testing
+        DB_PASSWORD: testing
       run: composer test
       continue-on-error: true
 
